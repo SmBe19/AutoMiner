@@ -293,13 +293,21 @@ class Game:
             return
 
         # play random
-        x = random.randint(0, self.width-1)
-        y = random.randint(0, self.height-1)
-        while field_open[y][x] or field_num[y][x] == -1:
+        if self.args.no_random:
+            print('I don\'t know what to do. Please choose a field!')
+            self.focus_window('autominer.py')
+            done = 'n'
+            while done.lower() not in ['y', 'n'] or done.lower() == 'n':
+                print('Done? [Y/n] ', end='')
+                done = input() or 'y'
+        else:
             x = random.randint(0, self.width-1)
             y = random.randint(0, self.height-1)
-        print('Play random')
-        self.open_tile(x, y)
+            while field_open[y][x] or field_num[y][x] == -1:
+                x = random.randint(0, self.width-1)
+                y = random.randint(0, self.height-1)
+            print('Play random')
+            self.open_tile(x, y)
 
     def first_round(self):
         x = random.randint(0, self.width-1)
@@ -365,8 +373,10 @@ class Game:
         self.field_num[y][x] = -1
         self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[1]//2, self.imstart_y + self.tileheight[y] + self.tileheight[1]//2, 3)
 
-    def focus_window(self):
-        res = subprocess.run(['xdotool', 'search', '--onlyvisible', '--limit', '1', '--sync', '--name', self.args.window_name], stdout=subprocess.PIPE)
+    def focus_window(self, window_name=None):
+        if not window_name:
+            window_name = self.args.window_name
+        res = subprocess.run(['xdotool', 'search', '--onlyvisible', '--limit', '1', '--sync', '--name', window_name], stdout=subprocess.PIPE)
         self.wid = res.stdout.decode('utf-8').strip()
         subprocess.run(['xdotool', 'windowactivate', '--sync', self.wid])
 
@@ -394,6 +404,7 @@ def play_game(args):
 def main():
     parser = argparse.ArgumentParser(description='Automatically find mines')
     parser.add_argument('window_name', nargs='?', default='Minen', help='Title of window which contains the game')
+    parser.add_argument('--no-random', action='store_true', help='Do not choose a random field')
     parser.add_argument('--d-number', action='store_true', help='Print the number field')
     parser.add_argument('--d-open', action='store_true', help='Print the open field')
     parser.add_argument('--d-required', action='store_true', help='Print the required field')
