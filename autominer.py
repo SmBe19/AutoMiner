@@ -88,34 +88,44 @@ class Game:
         im = Image.open('screen.png')
         field_open = [[False for _ in range(self.width)] for _ in range(self.height)]
         field_num = [[0 for _ in range(self.width)] for _ in range(self.height)]
-        for y in range(self.width):
-            for x in range(self.height):
+        for y in range(self.height):
+            for x in range(self.width):
                 px = self.get_tile_col(im, x, y)
                 field_open[y][x] = self.get_err(px, self.opencol) < 10
-                avg = self.get_tile_avg(im, x, y)
-                field_num[y][x] = self.guess_num(x, y, avg)
+                col = self.get_tile_num_col(im, x, y)
+                field_num[y][x] = self.guess_num(x, y, col)
         im.close()
         return field_open, field_num
 
-    def guess_num(self, x, y, avg):
-        if self.get_err(avg, self.opencol) < 22:
+    def guess_num(self, x, y, col):
+        if col == (-1, -1, -1):
             return 0
-        if self.get_err(avg, self.tilecol) < 22:
+        if self.get_err(col, self.opencol) < 22:
             return 0
-        if self.get_err(avg, (205, 208, 209)) < 10:
+        if self.get_err(col, self.tilecol) < 22:
+            return 0
+        if self.get_err(col, (75, 105, 131)) < 10:
             return 1
-        if self.get_err(avg, (202, 214, 200)) < 10:
+        if self.get_err(col, (70, 160, 70)) < 10:
             return 2
-        if self.get_err(avg, (222, 201, 194)) < 10:
+        if self.get_err(col, (223, 66, 30)) < 10:
             return 3
-        if self.get_err(avg, (205, 204, 207)) < 10:
-            # TODO differentiate between 1 and 4
+        if self.get_err(col, (98, 91, 129)) < 10:
             return 4
-        if self.get_err(avg, (210, 201, 196)) < 10:
+        if self.get_err(col, (0, 0, 0)) < 10:
             return 5
-        if self.get_err(avg, (169, 137, 132)) < 22:
+        if self.get_err(col, (0, 0, 0)) < 10:
+            return 6
+        if self.get_err(col, (0, 0, 0)) < 10:
+            return 7
+        if self.get_err(col, (0, 0, 0)) < 10:
+            return 8
+        if self.get_err(col, (119, 119, 119)) < 10:
             return -1
-        print("Could not match", x, y, avg)
+        if self.get_err(col, (136, 138, 133)) < 10 or self.get_err(col, (211, 215, 207)) < 10:
+            print('Boom')
+            exit(7)
+        print("Could not match", x, y, col)
         print(self.opencol, self.tilecol)
         exit(1)
 
@@ -142,9 +152,9 @@ class Game:
         def valid_neighbor(x, y, xx, yy):
             return inside(xx, yy) and (yy != y or xx != x)
 
-        def get_neighbors(x, y):
-            for yy in range(y-1, y+2):
-                for xx in range(x-1, x+2):
+        def get_neighbors(x, y, dx=1, dy=1):
+            for yy in range(y-dy, y+dy+1):
+                for xx in range(x-dx, x+dx+1):
                     if valid_neighbor(x, y, xx, yy):
                         yield xx, yy
 
@@ -256,6 +266,17 @@ class Game:
         for i in range(len(px)):
             err += abs(px[i]-pxprime[i])
         return err
+
+    def get_tile_num_col(self, im, xx, yy):
+        startx = self.imstart_x + xx * self.tilewidth
+        starty = self.imstart_y + yy * self.tilewidth
+        for y in range(starty, starty+self.tileinnerheight-4):
+            for x in range(startx, startx+self.tileinnerwidth-4):
+                px = im.getpixel((x, y))
+                if self.get_err(self.opencol, px[:3]) > 22 and self.get_err(self.tilecol, px[:3]) > 22:
+                    if all(px == im.getpixel((xxx, yyy)) for xxx, yyy in [(x-1, y-1), (x+1, y-1), (x-1, y+1), (x+1, y+1)]):
+                        return px[:3]
+        return (-1, -1, -1)
 
     def get_tile_avg(self, im, xx, yy):
         val = [0, 0, 0]
