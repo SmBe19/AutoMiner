@@ -17,14 +17,40 @@ class Game:
         print("Init game parameters")
         im = Image.open('screen.png')
         self.imwidth, self.imheight = im.size
-        self.background = im.getpixel((0, 0))
+
+        def get_background():
+            col = im.getpixel((self.imwidth//2, self.imheight//2))
+            for y in range(self.imheight//2, self.imheight):
+                for x in range(self.imwidth//2, self.imwidth):
+                    px = im.getpixel((x, y))
+                    if px[0] < col[0] and im.getpixel((x-5, y-5)) == col:
+                        return col[:3]
+                    else:
+                        col = px
+
+        self.background = get_background()
+
+        def find_bounds_tl():
+            for y in range(self.imheight):
+                for x in range(self.imwidth):
+                    px = im.getpixel((x, y))
+                    if px[:3] == self.background:
+                        return (x, y)
+        def find_bounds_br():
+            for y in range(self.imheight-1, -1, -1):
+                for x in range(self.imwidth-1, -1, -1):
+                    px = im.getpixel((x, y))
+                    if px[:3] == self.background:
+                        return (x, y)
+        self.cr_left, self.cr_top = find_bounds_tl()
+        self.cr_right, self.cr_bottom = find_bounds_br()
 
         def get_tiles():
-            for y in range(self.imheight):
-                for x in range(self.imwidth//2):
+            for y in range(self.cr_top, self.cr_bottom):
+                for x in range(self.cr_left, self.imwidth//2):
                     px = im.getpixel((x, y))
-                    if px != self.background and im.getpixel((x+5, y+5)) == px:
-                        return px, x, y
+                    if px[:3] != self.background and im.getpixel((x+5, y+5)) == px:
+                        return px[:3], x, y
 
         self.tilecol, self.imstart_x, self.imstart_y = get_tiles()
 
@@ -36,7 +62,7 @@ class Game:
             ax = self.imstart_x
             ay = self.imstart_y
             while ax < self.imwidth and ay < self.imheight:
-                px = im.getpixel((ax, ay))
+                px = im.getpixel((ax, ay))[:3]
                 if inside:
                     if px == self.background:
                         inside = False
@@ -72,9 +98,9 @@ class Game:
         return field_open, field_num
 
     def guess_num(self, x, y, avg):
-        if self.get_err(avg, self.opencol) < 10:
+        if self.get_err(avg, self.opencol) < 22:
             return 0
-        if self.get_err(avg, self.tilecol) < 10:
+        if self.get_err(avg, self.tilecol) < 22:
             return 0
         if self.get_err(avg, (205, 208, 209)) < 10:
             return 1
@@ -239,7 +265,7 @@ class Game:
         for y in range(starty, starty+self.tileinnerheight-4):
             for x in range(startx, startx+self.tileinnerwidth-4):
                 cnt += 1
-                px = im.getpixel((x, y))
+                px = im.getpixel((x, y))[:3]
                 for i in range(3):
                     val[i] += px[i]
         for i in range(3):
@@ -247,7 +273,7 @@ class Game:
         return tuple(val)
 
     def get_tile_col(self, im, x, y, offx=0, offy=0):
-        return im.getpixel((self.imstart_x + offx + x * self.tilewidth, self.imstart_y + offy + y * self.tileheight))
+        return im.getpixel((self.imstart_x + offx + x * self.tilewidth, self.imstart_y + offy + y * self.tileheight))[:3]
 
     def open_tile(self, x, y):
         print('Click tile', x, y)
