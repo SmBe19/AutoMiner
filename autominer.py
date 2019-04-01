@@ -231,7 +231,8 @@ class Game:
                     bmb = [False] * len(neighs)
                     for i in range(field_req[y][x]):
                         bmb[i] = True
-                    for abmb in itertools.permutations(bmb):
+
+                    for abmb in set(itertools.permutations(bmb)):
                         # TODO check whether the current bomb assignment is consistent
                         pass
 
@@ -272,7 +273,7 @@ class Game:
         pxx = [[im.getpixel((x, y)) for x in range(startx, startx+self.tileinnerwidth)] for y in range(starty, starty+self.tileinnerheight)]
         for y in range(self.tileinnerheight):
             for x in range(self.tileinnerwidth):
-                neighborhood = [(x+i, y+j) for i in range(-1, 2) for j in range(-1, 2)]
+                neighborhood = [(x+i, y+j) for i in range(-1, 1) for j in range(-1, 1)]
                 px = pxx[y][x]
                 if self.get_err(self.opencol, px[:3]) > 22 and self.get_err(self.tilecol, px[:3]) > 22:
                     if all(px == pxx[yyy][xxx] for xxx, yyy in neighborhood):
