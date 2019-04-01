@@ -122,7 +122,7 @@ class Game:
             return 4
         if self.get_err(col, (136, 70, 49)) < 10:
             return 5
-        if self.get_err(col, (0, 0, 0)) < 10:
+        if self.get_err(col, (157, 184, 210)) < 10:
             return 6
         if self.get_err(col, (0, 0, 0)) < 10:
             return 7
