@@ -1,0 +1,2 @@
+# AutoMiner
+Automatically find mines
