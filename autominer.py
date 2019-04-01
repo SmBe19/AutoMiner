@@ -13,7 +13,7 @@ class Game:
         self.args = args
 
     def init_game(self):
-        self.get_screenshot(delay=1)
+        self.get_screenshot(delay1=1)
         print("Init game parameters")
         im = Image.open('screen.png')
         self.imwidth, self.imheight = im.size
@@ -57,7 +57,7 @@ class Game:
         def count_tiles(dx, dy):
             count = 0
             innersize = 0
-            size = 0
+            size = [0]
             inside = True
             ax = self.imstart_x
             ay = self.imstart_y
@@ -67,13 +67,12 @@ class Game:
                     if px == self.background:
                         inside = False
                         count += 1
-                        if innersize == 0:
-                            innersize = ax - self.imstart_x + ay - self.imstart_y
+                    if innersize == 0 and px != self.tilecol:
+                        innersize = ax - self.imstart_x if dx > 0 else ay - self.imstart_y
                 else:
                     if px == self.tilecol:
                         inside = True
-                        if size == 0:
-                            size = ax - self.imstart_x + ay - self.imstart_y
+                        size.append(ax - self.imstart_x if dx > 0 else ay - self.imstart_y)
                 ax += dx
                 ay += dy
             return count, size, innersize
@@ -83,7 +82,7 @@ class Game:
         im.close()
 
     def read_field(self):
-        self.get_screenshot(delay=0.5)
+        self.get_screenshot(delay1=0.2)
         print("Read field")
         im = Image.open('screen.png')
         field_open = [[False for _ in range(self.width)] for _ in range(self.height)]
@@ -112,7 +111,7 @@ class Game:
             return 3
         if self.get_err(col, (98, 91, 129)) < 10:
             return 4
-        if self.get_err(col, (0, 0, 0)) < 10:
+        if self.get_err(col, (136, 70, 49)) < 10:
             return 5
         if self.get_err(col, (0, 0, 0)) < 10:
             return 6
@@ -123,9 +122,10 @@ class Game:
         if self.get_err(col, (119, 119, 119)) < 10:
             return -1
         if self.get_err(col, (136, 138, 133)) < 10 or self.get_err(col, (211, 215, 207)) < 10:
+            print('Color', col)
             print('Boom')
             exit(7)
-        print("Could not match", x, y, col)
+        print('Could not match', x, y, col)
         print(self.opencol, self.tilecol)
         exit(1)
 
@@ -193,6 +193,7 @@ class Game:
                     xx, yy = find_neighbor(x, y, lambda a, b: not a and b != -1)
                     if xx is not None:
                         self.open_tile(xx, yy)
+                        found_some = True
 
         if found_some:
             print('All requirements are satisfied for some fields')
@@ -249,7 +250,7 @@ class Game:
         x = random.randint(0, self.width-1)
         y = random.randint(0, self.height-1)
         self.open_tile(x, y)
-        self.get_screenshot(delay=0.5)
+        self.get_screenshot(delay1=0.2)
         print("Make first move")
         im = Image.open('screen.png')
         self.opencol = self.get_tile_col(im, x, y)
@@ -268,23 +269,24 @@ class Game:
         return err
 
     def get_tile_num_col(self, im, xx, yy):
-        startx = self.imstart_x + xx * self.tilewidth
-        starty = self.imstart_y + yy * self.tilewidth
-        for y in range(starty, starty+self.tileinnerheight-4):
-            for x in range(startx, startx+self.tileinnerwidth-4):
+        startx = self.imstart_x + self.tilewidth[xx]
+        starty = self.imstart_y + self.tileheight[yy]
+        for y in range(starty, starty+self.tileinnerheight):
+            for x in range(startx, startx+self.tileinnerwidth):
+                neighborhood = [(x+i, y+j) for i in range(-1, 2) for j in range(-1, 2)]
                 px = im.getpixel((x, y))
                 if self.get_err(self.opencol, px[:3]) > 22 and self.get_err(self.tilecol, px[:3]) > 22:
-                    if all(px == im.getpixel((xxx, yyy)) for xxx, yyy in [(x-1, y-1), (x+1, y-1), (x-1, y+1), (x+1, y+1)]):
+                    if all(px == im.getpixel((xxx, yyy)) for xxx, yyy in neighborhood):
                         return px[:3]
         return (-1, -1, -1)
 
     def get_tile_avg(self, im, xx, yy):
         val = [0, 0, 0]
-        startx = self.imstart_x + xx * self.tilewidth
-        starty = self.imstart_y + yy * self.tilewidth
+        startx = self.imstart_x + self.tilewidth[xx]
+        starty = self.imstart_y + self.tileheight[yy]
         cnt = 0
-        for y in range(starty, starty+self.tileinnerheight-4):
-            for x in range(startx, startx+self.tileinnerwidth-4):
+        for y in range(starty, starty+self.tileinnerheight):
+            for x in range(startx, startx+self.tileinnerwidth):
                 cnt += 1
                 px = im.getpixel((x, y))[:3]
                 for i in range(3):
@@ -294,25 +296,26 @@ class Game:
         return tuple(val)
 
     def get_tile_col(self, im, x, y, offx=0, offy=0):
-        return im.getpixel((self.imstart_x + offx + x * self.tilewidth, self.imstart_y + offy + y * self.tileheight))[:3]
+        return im.getpixel((self.imstart_x + offx + self.tilewidth[x], self.imstart_y + offy + self.tileheight[y]))[:3]
 
     def open_tile(self, x, y):
         print('Click tile', x, y)
-        self.mouse_click(self.imstart_x + x * self.tilewidth, self.imstart_y + y * self.tileheight, 1)
+        self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[0]//2, self.imstart_y + self.tileheight[y] + self.tileheight[0]//2, 1)
 
     def mark_tile(self, x, y):
         print('Mark tile', x, y)
-        self.mouse_click(self.imstart_x + x * self.tilewidth, self.imstart_y + y * self.tileheight, 3)
+        self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[0]//2, self.imstart_y + self.tileheight[y] + self.tileheight[0]//2, 3)
 
     def focus_window(self):
         res = subprocess.run(['xdotool', 'search', '--onlyvisible', '--limit', '1', '--sync', '--name', self.args.window_name], stdout=subprocess.PIPE)
         self.wid = res.stdout.decode('utf-8').strip()
         subprocess.run(['xdotool', 'windowactivate', '--sync', self.wid])
 
-    def get_screenshot(self, delay=0):
+    def get_screenshot(self, delay1=0, delay2=0.1):
+        time.sleep(delay1)
         self.focus_window()
         self.move_mouse(0, 0)
-        time.sleep(delay)
+        time.sleep(delay2)
         subprocess.run(['gnome-screenshot', '-f', 'screen.png', '-B', '-w'])
 
     def move_mouse(self, x, y):
