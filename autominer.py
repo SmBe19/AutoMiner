@@ -87,7 +87,7 @@ class Game:
         im.close()
 
     def read_field(self):
-        self.get_screenshot(delay1=0.2)
+        self.get_screenshot()
         print("Read field")
         im = Image.open('screen.png')
         for y in range(self.height):
@@ -183,7 +183,7 @@ class Game:
                     field_req[yy][xx] -= 1
                     assert field_req[yy][xx] >= 0
 
-        # calculate the remaining required number of bombss
+        # calculate the remaining required number of mines
         for y in range(self.height):
             for x in range(self.width):
                 if field_num[y][x] == -1:
@@ -205,12 +205,13 @@ class Game:
             print('Open neighbors of finished fields')
             return
 
-        # all have to be bombs
+        # all have to be mines
         for y in range(self.height):
             for x in range(self.width):
                 if field_open[y][x] and field_req[y][x] > 0:
                     if count_neighbors(x, y, lambda a, b: not a and b != -1) == field_req[y][x]:
-                        print('All neighbors are bombs', x, y, field_req[y][x])
+                        if self.args.d_allmines:
+                            print('All neighbors are mines', x, y, field_req[y][x])
                         for xx, yy in get_neighbors(x, y):
                             if not field_open[yy][xx] and field_num[yy][xx] != -1:
                                 self.mark_tile(xx, yy)
@@ -220,21 +221,70 @@ class Game:
                         if self.args.d_required:
                             print_required()
         if found_some:
-            print('Mark necessary bombs')
+            print('Mark necessary mines')
             self.choose_tile(field_open, field_num)
             return
+
+        def check_consistent(maybe_mines):
+            for y in range(self.height):
+                for x in range(self.width):
+                    if field_open[y][x]:
+                        ma = 0
+                        mi = 0
+                        for xx, yy in get_neighbors(x, y):
+                            if maybe_mines[yy][xx] == 1:
+                                ma += 1
+                                mi += 1
+                            elif maybe_mines[yy][xx] == 0:
+                                ma += 1
+                        if mi > field_num[y][x] or ma < field_num[y][x]:
+                            if self.args.d_brute:
+                                print('Not consistent', x, y, mi, ma, field_num[y][x])
+                            return False
+            if self.args.d_brute:
+                print('Consistent')
+            return True
 
         for y in range(self.height):
             for x in range(self.width):
                 if field_open[y][x] and field_req[y][x] > 0:
-                    neighs = [(xx, yy) for xx, yy in get_neighbors(x, y, dx=1, dy=1) if not field_open[yy][xx] and field_num[yy][xx] != -1]
-                    bmb = [False] * len(neighs)
+                    maybe_mines = [[1 if field_num[y][x] == -1 else (-1 if field_open[y][x] else 0) for x in range(self.width)] for y in range(self.height)]
+                    neighs = [(xx, yy) for xx, yy in get_neighbors(x, y) if not field_open[yy][xx] and field_num[yy][xx] != -1]
+                    neighsum = [0 for _ in range(len(neighs))]
+                    mines = [False] * len(neighs)
                     for i in range(field_req[y][x]):
-                        bmb[i] = True
+                        mines[i] = True
 
-                    for abmb in set(itertools.permutations(bmb)):
-                        # TODO check whether the current bomb assignment is consistent
-                        pass
+                    if self.args.d_brute:
+                        print('Brute try', x, y, neighs)
+
+                    cnt = 0
+                    for amine in set(itertools.permutations(mines)):
+                        if self.args.d_brute:
+                            print('Amine', amine)
+                        for neigh, mine in zip(neighs, amine):
+                            maybe_mines[neigh[1]][neigh[0]] = 1 if mine else -1
+
+                        if check_consistent(maybe_mines):
+                            cnt += 1
+                            for i in range(len(neighs)):
+                                neighsum[i] += 1 if amine[i] else -1
+                    assert cnt > 0
+                    if self.args.d_brute:
+                        print('Neighsum', cnt, neighsum)
+                    for neigh, su in zip(neighs, neighsum):
+                        if su == cnt:
+                            self.mark_tile(neigh[0], neigh[1])
+                            field_num[neigh[1]][neigh[0]] = -1
+                            reduce_required(neigh[0], neigh[1])
+                            found_some = True
+                        elif su == -cnt:
+                            self.open_tile(neigh[0], neigh[1])
+                            found_some = True
+
+        if found_some:
+            print('Brute force thinking')
+            return
 
         # play random
         x = random.randint(0, self.width-1)
@@ -249,7 +299,7 @@ class Game:
         x = random.randint(0, self.width-1)
         y = random.randint(0, self.height-1)
         self.open_tile(x, y)
-        self.get_screenshot(delay1=0.2)
+        self.get_screenshot()
         print("Make first move")
         im = Image.open('screen.png')
         self.opencol = self.get_tile_col(im, x, y)
@@ -314,7 +364,7 @@ class Game:
         self.wid = res.stdout.decode('utf-8').strip()
         subprocess.run(['xdotool', 'windowactivate', '--sync', self.wid])
 
-    def get_screenshot(self, delay1=0, delay2=0.1):
+    def get_screenshot(self, delay1=0.2, delay2=0.2):
         time.sleep(delay1)
         self.focus_window()
         self.move_mouse(0, 0)
@@ -340,8 +390,10 @@ def main():
     parser.add_argument('--d-number', action='store_true', help='Print the number field')
     parser.add_argument('--d-open', action='store_true', help='Print the open field')
     parser.add_argument('--d-required', action='store_true', help='Print the required field')
+    parser.add_argument('--d-brute', action='store_true', help='Print brute force info')
     parser.add_argument('--d-click', action='store_true', help='Print all clicks')
     parser.add_argument('--d-mark', action='store_true', help='Print all markings')
+    parser.add_argument('--d-allmines', action='store_true', help='Print if all neighbors are mines')
     args = parser.parse_args()
     play_game(args)
 
