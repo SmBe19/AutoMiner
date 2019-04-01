@@ -147,8 +147,10 @@ class Game:
             print("Field Required")
             for line in field_req:
                 print(*['{:2}'.format(l) for l in line])
-        print_number()
-        print_open()
+        if self.args.d_number:
+            print_number()
+        if self.args.d_open:
+            print_open()
         field_req = [[field_num[y][x] for x in range(self.width)] for y in range(self.height)]
 
         def inside(x, y):
@@ -173,8 +175,7 @@ class Game:
         def find_neighbor(x, y, check):
             for xx, yy in get_neighbors(x, y):
                 if check(field_open[yy][xx], field_num[yy][xx]):
-                    return xx, yy
-            return None, None
+                    yield xx, yy
 
         def reduce_required(x, y):
             for xx, yy in get_neighbors(x, y):
@@ -187,7 +188,8 @@ class Game:
             for x in range(self.width):
                 if field_num[y][x] == -1:
                     reduce_required(x, y)
-        print_required()
+        if self.args.d_required:
+            print_required()
 
         found_some = False
 
@@ -195,13 +197,12 @@ class Game:
         for y in range(self.height):
             for x in range(self.width):
                 if field_open[y][x] and field_req[y][x] == 0:
-                    xx, yy = find_neighbor(x, y, lambda a, b: not a and b != -1)
-                    if xx is not None:
+                    for xx, yy in find_neighbor(x, y, lambda a, b: not a and b != -1):
                         self.open_tile(xx, yy)
                         found_some = True
 
         if found_some:
-            print('All requirements are satisfied for some fields')
+            print('Open neighbors of finished fields')
             return
 
         # all have to be bombs
@@ -209,16 +210,17 @@ class Game:
             for x in range(self.width):
                 if field_open[y][x] and field_req[y][x] > 0:
                     if count_neighbors(x, y, lambda a, b: not a and b != -1) == field_req[y][x]:
-                        print('Found all bombs', x, y, field_req[y][x])
+                        print('All neighbors are bombs', x, y, field_req[y][x])
                         for xx, yy in get_neighbors(x, y):
                             if not field_open[yy][xx] and field_num[yy][xx] != -1:
                                 self.mark_tile(xx, yy)
                                 field_num[yy][xx] = -1
                                 reduce_required(xx, yy)
                                 found_some = True
-                        print_required()
+                        if self.args.d_required:
+                            print_required()
         if found_some:
-            print('Marked some as necessary bombs')
+            print('Mark necessary bombs')
             self.choose_tile(field_open, field_num)
             return
 
@@ -230,7 +232,6 @@ class Game:
                     for i in range(field_req[y][x]):
                         bmb[i] = True
                     for abmb in itertools.permutations(bmb):
-                        print(abmb)
                         # TODO check whether the current bomb assignment is consistent
                         pass
 
@@ -297,13 +298,15 @@ class Game:
         return im.getpixel((self.imstart_x + offx + self.tilewidth[x], self.imstart_y + offy + self.tileheight[y]))[:3]
 
     def open_tile(self, x, y):
-        print('Click tile', x, y)
-        self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[0]//2, self.imstart_y + self.tileheight[y] + self.tileheight[0]//2, 1)
+        if self.args.d_click:
+            print('Click tile', x, y)
+        self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[1]//2, self.imstart_y + self.tileheight[y] + self.tileheight[1]//2, 1)
 
     def mark_tile(self, x, y):
-        print('Mark tile', x, y)
+        if self.args.d_mark:
+            print('Mark tile', x, y)
         self.field_num[y][x] = -1
-        self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[0]//2, self.imstart_y + self.tileheight[y] + self.tileheight[0]//2, 3)
+        self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[1]//2, self.imstart_y + self.tileheight[y] + self.tileheight[1]//2, 3)
 
     def focus_window(self):
         res = subprocess.run(['xdotool', 'search', '--onlyvisible', '--limit', '1', '--sync', '--name', self.args.window_name], stdout=subprocess.PIPE)
@@ -333,6 +336,11 @@ def play_game(args):
 def main():
     parser = argparse.ArgumentParser(description='Automatically find mines')
     parser.add_argument('window_name', nargs='?', default='Minen', help='Title of window which contains the game')
+    parser.add_argument('--d-number', action='store_true', help='Print the number field')
+    parser.add_argument('--d-open', action='store_true', help='Print the open field')
+    parser.add_argument('--d-required', action='store_true', help='Print the required field')
+    parser.add_argument('--d-click', action='store_true', help='Print all clicks')
+    parser.add_argument('--d-mark', action='store_true', help='Print all markings')
     args = parser.parse_args()
     play_game(args)
 
