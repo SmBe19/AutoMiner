@@ -191,19 +191,7 @@ class Game:
         if self.args.d_required:
             print_required()
 
-        found_some = False
-
-        # all requirements satisfied
-        for y in range(self.height):
-            for x in range(self.width):
-                if field_open[y][x] and field_req[y][x] == 0:
-                    for xx, yy in find_neighbor(x, y, lambda a, b: not a and b != -1):
-                        self.open_tile(xx, yy)
-                        found_some = True
-
-        if found_some:
-            print('Open neighbors of finished fields')
-            return
+        found_some1 = False
 
         # all have to be mines
         for y in range(self.height):
@@ -217,12 +205,27 @@ class Game:
                                 self.mark_tile(xx, yy)
                                 field_num[yy][xx] = -1
                                 reduce_required(xx, yy)
-                                found_some = True
+                                found_some1 = True
                         if self.args.d_required:
                             print_required()
-        if found_some:
+        if found_some1:
             print('Mark necessary mines')
-            self.choose_tile(field_open, field_num)
+
+        found_some2 = False
+
+        # all requirements satisfied
+        for y in range(self.height):
+            for x in range(self.width):
+                if field_open[y][x] and field_req[y][x] == 0:
+                    for xx, yy in find_neighbor(x, y, lambda a, b: not a and b != -1):
+                        assert not field_open[yy][xx]
+                        self.open_tile(xx, yy)
+                        found_some2 = True
+
+        if found_some2:
+            print('Open neighbors of finished fields')
+
+        if found_some1 or found_some2:
             return
 
         def check_consistent(maybe_mines):
@@ -244,6 +247,8 @@ class Game:
             if self.args.d_brute:
                 print('Consistent')
             return True
+
+        found_some3 = False
 
         for y in range(self.height):
             for x in range(self.width):
@@ -277,12 +282,13 @@ class Game:
                             self.mark_tile(neigh[0], neigh[1])
                             field_num[neigh[1]][neigh[0]] = -1
                             reduce_required(neigh[0], neigh[1])
-                            found_some = True
+                            found_some3 = True
                         elif su == -cnt:
+                            assert not field_open[neigh[1]][neigh[0]]
                             self.open_tile(neigh[0], neigh[1])
-                            found_some = True
+                            found_some3 = True
 
-        if found_some:
+        if found_some3:
             print('Brute force thinking')
             return
 
@@ -369,7 +375,8 @@ class Game:
         self.focus_window()
         self.move_mouse(0, 0)
         time.sleep(delay2)
-        subprocess.run(['gnome-screenshot', '-f', 'screen.png', '-B', '-w'])
+        #subprocess.run(['gnome-screenshot', '-f', 'screen.png', '-B', '-w'])
+        subprocess.run(['import', '-silent', '-window', self.wid, 'screen.png'])
 
     def move_mouse(self, x, y):
         subprocess.run(['xdotool', 'mousemove', '--window', self.wid, str(x), str(y)])
