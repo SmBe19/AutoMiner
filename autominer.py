@@ -79,22 +79,31 @@ class Game:
 
         self.width, self.tilewidth, self.tileinnerwidth = count_tiles(1, 0)
         self.height, self.tileheight, self.tileinnerheight = count_tiles(0, 1)
+
+        self.need_read = [[True for _ in range(self.width)] for _ in range(self.height)]
+        self.field_open = [[False for _ in range(self.width)] for _ in range(self.height)]
+        self.field_num = [[0 for _ in range(self.width)] for _ in range(self.height)]
+
         im.close()
 
     def read_field(self):
         self.get_screenshot(delay1=0.2)
         print("Read field")
         im = Image.open('screen.png')
-        field_open = [[False for _ in range(self.width)] for _ in range(self.height)]
-        field_num = [[0 for _ in range(self.width)] for _ in range(self.height)]
         for y in range(self.height):
             for x in range(self.width):
-                px = self.get_tile_col(im, x, y)
-                field_open[y][x] = self.get_err(px, self.opencol) < 10
-                col = self.get_tile_num_col(im, x, y)
-                field_num[y][x] = self.guess_num(x, y, col)
+                if self.need_read[y][x]:
+                    px = self.get_tile_col(im, x, y)
+                    self.field_open[y][x] = self.get_err(px, self.opencol) < 10
+                    if self.field_open[y][x]:
+                        col = self.get_tile_num_col(im, x, y)
+                        self.field_num[y][x] = self.guess_num(x, y, col)
+                        self.need_read[y][x] = False
+                    else:
+                        # check for boom
+                        num = self.guess_num(x, y, px)
         im.close()
-        return field_open, field_num
+        return self.field_open, self.field_num
 
     def guess_num(self, x, y, col):
         if col == (-1, -1, -1):
@@ -121,10 +130,6 @@ class Game:
             return 8
         if self.get_err(col, (119, 119, 119)) < 10:
             return -1
-        if self.get_err(col, (136, 138, 133)) < 10 or self.get_err(col, (211, 215, 207)) < 10:
-            print('Color', col)
-            print('Boom')
-            exit(7)
         print('Could not match', x, y, col)
         print(self.opencol, self.tilecol)
         exit(1)
@@ -197,7 +202,7 @@ class Game:
 
         if found_some:
             print('All requirements are satisfied for some fields')
-            return None, None
+            return
 
         # all have to be bombs
         for y in range(self.height):
@@ -214,37 +219,29 @@ class Game:
                         print_required()
         if found_some:
             print('Marked some as necessary bombs')
-            return self.choose_tile(field_open, field_num)
+            self.choose_tile(field_open, field_num)
+            return
 
         for y in range(self.height):
             for x in range(self.width):
                 if field_open[y][x] and field_req[y][x] > 0:
-                    neighs = [(xx, yy) for xx, yy in get_neighbors(x, y) if not field_open[yy][xx] and field_num[yy][xx] != -1]
+                    neighs = [(xx, yy) for xx, yy in get_neighbors(x, y, dx=1, dy=1) if not field_open[yy][xx] and field_num[yy][xx] != -1]
                     bmb = [False] * len(neighs)
                     for i in range(field_req[y][x]):
                         bmb[i] = True
                     for abmb in itertools.permutations(bmb):
+                        print(abmb)
                         # TODO check whether the current bomb assignment is consistent
                         pass
 
         # play random
         x = random.randint(0, self.width-1)
         y = random.randint(0, self.height-1)
-        while field_open[y][x]:
+        while field_open[y][x] or field_num[y][x] == -1:
             x = random.randint(0, self.width-1)
             y = random.randint(0, self.height-1)
         print('Play random')
-        return x, y
-
-    def do_round(self):
-        field_open, field_num = self.read_field()
-        if not any(any(field for field in line) for line in field_open):
-            print("Boom")
-            return False
-        x, y = self.choose_tile(field_open, field_num)
-        if x is not None:
-            self.open_tile(x, y)
-        return True
+        self.open_tile(x, y)
 
     def first_round(self):
         x = random.randint(0, self.width-1)
@@ -258,9 +255,9 @@ class Game:
 
     def play(self):
         self.first_round()
-        self.do_round()
-        while self.do_round():
-            pass
+        while True:
+            field_open, field_num = self.read_field()
+            self.choose_tile(field_open, field_num)
 
     def get_err(self, px, pxprime):
         err = 0
@@ -271,12 +268,13 @@ class Game:
     def get_tile_num_col(self, im, xx, yy):
         startx = self.imstart_x + self.tilewidth[xx]
         starty = self.imstart_y + self.tileheight[yy]
-        for y in range(starty, starty+self.tileinnerheight):
-            for x in range(startx, startx+self.tileinnerwidth):
+        pxx = [[im.getpixel((x, y)) for x in range(startx, startx+self.tileinnerwidth)] for y in range(starty, starty+self.tileinnerheight)]
+        for y in range(self.tileinnerheight):
+            for x in range(self.tileinnerwidth):
                 neighborhood = [(x+i, y+j) for i in range(-1, 2) for j in range(-1, 2)]
-                px = im.getpixel((x, y))
+                px = pxx[y][x]
                 if self.get_err(self.opencol, px[:3]) > 22 and self.get_err(self.tilecol, px[:3]) > 22:
-                    if all(px == im.getpixel((xxx, yyy)) for xxx, yyy in neighborhood):
+                    if all(px == pxx[yyy][xxx] for xxx, yyy in neighborhood):
                         return px[:3]
         return (-1, -1, -1)
 
@@ -304,6 +302,7 @@ class Game:
 
     def mark_tile(self, x, y):
         print('Mark tile', x, y)
+        self.field_num[y][x] = -1
         self.mouse_click(self.imstart_x + self.tilewidth[x] + self.tilewidth[0]//2, self.imstart_y + self.tileheight[y] + self.tileheight[0]//2, 3)
 
     def focus_window(self):
